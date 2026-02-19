@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Steeze Lifts Sales System</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<style>
+body { font-family: Arial; margin:40px; }
+.logo { height:80px; margin-bottom:20px; }
+button { padding:6px 12px; }
+table, th, td { border:1px solid #ddd; border-collapse: collapse; padding:6px; }
+th { background:#f4f4f4; }
+</style>
+</head>
+
+<body>
+
+<img src="/static/logo.png" class="logo">
+<h2>Steeze Lifts – Sales System</h2>
+
+<form id="saleForm">
+<input type="hidden" id="edit_id">
+
+Supplier:
+<select id="supplier">
+{% for s in suppliers %}
+<option value="{{s}}">{{s}}</option>
+{% endfor %}
+</select>
+
+Party:
+<select id="party">
+{% for p in parties %}
+<option value="{{p}}">{{p}}</option>
+{% endfor %}
+</select>
+
+Work:
+<select id="work_type">
+{% for w in work_types %}
+<option value="{{w}}">{{w}}</option>
+{% endfor %}
+</select>
+
+Date: <input type="date" id="date"><br><br>
+
+Completion %: <input type="number" id="completion">
+Quotation: <input id="quotation">
+PO: <input id="po">
+Invoice: <input id="invoice"><br><br>
+
+Invoice Total: <input type="number" id="total">
+Amount Paid: <input type="number" id="paid">
+
+<button type="submit">Save</button>
+</form>
+
+<h3 id="result"></h3>
+
+<hr>
+
+<button onclick="window.location='/export-excel'">Export Excel</button>
+
+<table id="table"></table>
+
+<canvas id="chart"></canvas>
+
+<script>
+
+async function loadSales(){
+const res = await fetch("/sales");
+const data = await res.json();
+
+let table = document.getElementById("table");
+
+table.innerHTML = `
+<tr>
+<th>ID</th><th>Supplier</th><th>Party</th>
+<th>Date</th><th>Invoice</th>
+<th>Total</th><th>Paid</th>
+<th>Outstanding</th><th>Status</th>
+<th>Edit</th><th>Delete</th>
+</tr>`;
+
+data.forEach(r=>{
+table.innerHTML += `
+<tr>
+<td>${r.id}</td>
+<td>${r.supplier}</td>
+<td>${r.party}</td>
+<td>${r.date}</td>
+<td>${r.invoice_no}</td>
+<td>${r.invoice_total}</td>
+<td>${r.amount_paid}</td>
+<td>${r.outstanding}</td>
+<td>${r.status}</td>
+<td><button onclick="editSale(${r.id})">Edit</button></td>
+<td><button onclick="deleteSale(${r.id})">X</button></td>
+</tr>`;
+});
+}
+
+async function editSale(id){
+const res = await fetch("/sales");
+const data = await res.json();
+const r = data.find(x=>x.id===id);
+
+edit_id.value=r.id;
+supplier.value=r.supplier;
+party.value=r.party;
+work_type.value=r.work_type;
+date.value=r.date;
+completion.value=r.completion_percent;
+quotation.value=r.quotation_no;
+po.value=r.po_no;
+invoice.value=r.invoice_no;
+total.value=r.invoice_total;
+paid.value=r.amount_paid;
+}
+
+async function deleteSale(id){
+await fetch(`/delete-sale/${id}`,{method:"DELETE"});
+loadSales();
+loadChart();
+}
+
+document.getElementById("saleForm").addEventListener("submit", async e=>{
+e.preventDefault();
+
+const sale={
+supplier:supplier.value,
+party:party.value,
+date:date.value,
+work_type:work_type.value,
+completion_percent:parseFloat(completion.value||0),
+quotation_no:quotation.value,
+po_no:po.value,
+invoice_no:invoice.value,
+invoice_total:parseFloat(total.value||0),
+amount_paid:parseFloat(paid.value||0)
+};
+
+let url="/record-sale";
+let method="POST";
+
+if(edit_id.value){
+url=`/update-sale/${edit_id.value}`;
+method="PUT";
+}
+
+const res=await fetch(url,{
+method:method,
+headers:{"Content-Type":"application/json"},
+body:JSON.stringify(sale)
+});
+
+const r=await res.json();
+result.innerText=`Outstanding: ${r.outstanding} | Status: ${r.status}`;
+
+saleForm.reset();
+edit_id.value="";
+
+loadSales();
+loadChart();
+});
+
+async function loadChart(){
+const res = await fetch("/dashboard-yearly");
+const data = await res.json();
+
+new Chart(document.getElementById("chart"),{
+type:'bar',
+data:{
+labels:data.map(d=>d.year),
+datasets:[{label:"Year Profit",data:data.map(d=>d.profit)}]
+}
+});
+}
+
+loadSales();
+loadChart();
+
+</script>
+
+</body>
+</html>
+
